@@ -25,7 +25,7 @@ class APICall:
 				call.returnSizes = call.returnSizes + self.returnSizes
 				#The calls are the same, make sure to add all the 
 				for key, vals in self.params.items():
-					if call.params[key] is None:
+					if key not in call.params:
 						call.params[key] = vals
 					else:
 						#Add all the values together

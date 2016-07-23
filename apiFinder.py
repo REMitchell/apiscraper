@@ -19,8 +19,6 @@ from bs4 import BeautifulSoup
 from apicall import APICall
 
 
-
-
 def createWebDriver():
 	theURL=''
 	fireBugPath = 'extensions/firebug-2.0.16.xpi'
@@ -36,7 +34,7 @@ def createWebDriver():
 	#firefox preferences
 	profile.set_preference("app.update.enabled", False)  
 	profile.native_events_enabled = True
-	profile.set_preference("webdriver.log.file", "/Users/ryan/Documents/apiFinder/log.txt")
+	profile.set_preference("webdriver.log.file", os.getcwd()+"/log.txt")
 	profile.set_preference("extensions.firebug.DBG_STARTER", True);
 
 	profile.set_preference("extensions.firebug.currentVersion", "2.0.16")
@@ -64,7 +62,7 @@ def createWebDriver():
 	profile.set_preference("extensions.firebug.netexport.pageLoadedTimeout", 15000)
 	profile.set_preference("extensions.firebug.netexport.timeout", 10000)
 
-	profile.set_preference("extensions.firebug.netexport.defaultLogDir", "/Users/ryan/Documents/apiFinder/nextexport")
+	profile.set_preference("extensions.firebug.netexport.defaultLogDir", os.getcwd()+"/nextexport")
 
 	profile.update_preferences();
 
@@ -131,29 +129,37 @@ def getContentType(headers):
 
 #Get rid of all the current har files
 def setup():
-	harDir = "/Users/ryan/Documents/apiFinder/nextexport";
+	harDir = "nextexport";
 	files = os.listdir(harDir)
 	for singleFile in files:
 		if "har" in singleFile:
 			os.remove(harDir+"/"+singleFile)
 
-def getHarFile(files):
-	for singleFile in files:
-		if "har" in singleFile:
-			return singleFile
-
-def readHarfile():
-	print("Readng .har file")
-	harDir = "/Users/ryan/Documents/apiFinder/nextexport";
+def getAllHarFiles(harDir="nextexport"):
 	files = os.listdir(harDir)
-	print("Number of files is: "+str(len(files)))
-	#f = open("nextexport/"+files[0], 'rb')
-	harFile = "nextexport/"+getHarFile(files)
-	f = codecs.open(harFile, "rb")
+	harFiles = []
+	for filename in files:
+		if "har" in filename:
+			harFiles.append(harDir+"/"+filename)
+	return harFiles
+
+def readHarFile(harPath):
+	f = codecs.open(harPath, "rb")
 	#b'\x80abc'.decode("utf-8", "replace")
 	harTxt = f.read().decode("utf-8", "replace")
 	harObj = json.loads(harTxt)
 	return harObj
+
+def getSingleHarFile(harDir="nextexport"):
+	#f = open("nextexport/"+files[0], 'rb')
+	harFiles = getAllHarFiles(harDir)
+	if len(harFiles) < 1:
+		return None
+	#Get last harFile in the directory
+	harFile = getAllHarFiles(harDir)[len(harFiles)-1]
+	return readHarFile(harFile)
+
+
 
 #Use a global APICall list for this. If the same API call is found, 
 #add the new values to the parameter list 
@@ -180,6 +186,7 @@ def searchHarfile(harObj, searchString):
 
 	return apiCalls
 
+
 def scanHarfile(harObj, apiCalls = []):
 	#Store the api call objects here
 	entries = harObj["log"]["entries"]
@@ -189,23 +196,25 @@ def scanHarfile(harObj, apiCalls = []):
 		if entry["response"]["content"] is not None and entry["response"]["content"]["mimeType"] is not None: 
 			contentType = entry["response"]["content"]["mimeType"]
 			responseSize = entry["response"]["content"]["size"]
-			print("Response size is: "+str(responseSize))
 			if contentType is None:
 				print("No header for response "+str(url))
 			elif contentType.lower() == "application/json":
-				print(url)
-				print(method)
-				print("Content Type: "+str(contentType))
 				parseCall(url, "json", method, responseSize).addToList(apiCalls)
 
 			elif contentType.lower() == "application/xml":
-				print(url)
-				print(method)
-				print("Content Type: "+str(contentType))
 				parseCall(url, "xml", method, responseSize).addToList(apiCalls)
 		else:
 			print("No headers in response")
 
+	return apiCalls
+
+def parseMultipleHars(directory):
+	apiCalls = []
+	harPaths = getAllHarFiles(directory)
+	for harPath in harPaths:
+		print("Parsing file: "+harPath)
+		harObj = readHarFile(harPath)
+		apiCalls = scanHarfile(harObj, apiCalls)
 	return apiCalls
 
 #Performs a recursive crawl of a site, searching for APIs
@@ -214,7 +223,7 @@ def crawlingScan(url, apiResults = [], allFoundURLs = []):
 		print("Scanning URL: "+url)
 		html = openURL(url)
 		bsObj = BeautifulSoup(html, "lxml")
-		harObj = readHarfile()
+		harObj = getSingleHarFile()
 		apiResults = scanHarfile(harObj, apiResults)
 		allFoundURLs, newUrls = findInternalURLs(bsObj, url, allFoundURLs)
 		for newUrl in newUrls:
@@ -240,6 +249,7 @@ usage = '''
 USAGE:
 python apiFinder.py search <url> <search term>" 
 python apiFinder.py scan <url>
+python apiFinder.py parse <directory>
 	'''
 if len(sys.argv) < 2:
 	usage = "Need some more arguments there!"+usage
@@ -267,8 +277,15 @@ elif sys.argv[1].lower() == "search":
 		sys.exit(1)
 	print("Searching URL for \""+sys.argv[3]+"\"")
 	openURL(sys.argv[2])
-	harObj = readHarfile()
+	harObj = getSingleHarFile()
 	apiResults = searchHarfile(harObj, sys.argv[3])
+
+elif sys.argv[1].lower() == "parse":
+	print("Parsing existing directory of har files")
+	if sys.argv[2] is None:
+		print("Must provide directory"+usage)
+		sys.exit(1)
+	apiResults = parseMultipleHars(sys.argv[2])
 
 else:
 	print("Unknown function "+str(sys.argv[1])+usage)
