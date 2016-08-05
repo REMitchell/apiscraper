@@ -4,8 +4,6 @@ import tldextract
 import sys
 import re
 import os
-import subprocess
-import hashlib
 import time
 import datetime
 from browsermobproxy import Server
@@ -15,8 +13,22 @@ import selenium
 import json
 import codecs
 from bs4 import BeautifulSoup
+import time
+import argparse
 
-from apicall import APICall
+from apicall import APICall, APICallEncoder
+
+def outputAPIs(apiCalls):
+	print("API RESULTS ARE")
+	htmlFile = open('output.html', 'w')
+	jsonFile = open("output.json", "w")
+	apiCalls = findPathVariables(apiCalls)
+	for apiResult in apiCalls:
+		print(apiResult.toString())
+	jsonFile.write(json.dumps(apiCalls, cls=APICallEncoder))
+	#jsonObj = json.JSONDecoder().decode(apiCalls)
+	#print(jsonObj)
+	#pickle.dump(apiCalls, open("output.json", "wb"))
 
 
 def createWebDriver():
@@ -90,10 +102,29 @@ def openURL(url):
 	time.sleep(1) #wait for the page to load
 	browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-	time.sleep(10) #wait for the page to load
+	time.sleep(15) #wait for the page to load
 	html = browser.page_source
 	browser.quit()
 	return html
+
+def findPathVariables(apiList):
+	digits = re.compile('\d')
+	for i in range(0,len(apiList)):
+		for j in range(i+1, len(apiList)):
+			paths1 = apiList[i].path.split('/')
+			paths2 = apiList[j].path.split('/')
+			if len(paths1) == len(paths2) and len(paths1) > 3:
+				if paths1[:-1] == paths2[:-1]:
+					paths1end = paths1[len(paths1)-1]
+					paths2end = paths2[len(paths2)-1]
+					if ('.' not in paths1end and '.' not in paths1end) or (digits.search(paths1end) and digits.search(paths2end)):
+						#We can assume that they're the same API
+						apiList[i].pathParams.add(paths1end)
+						apiList[i].pathParams.add(paths2end)
+						apiList[i].path = '/'.join(paths1[:-1])
+						#Remove this later
+						apiList[j].path = ''
+	return [api for api in apiList if api.path != '']
 
 def isInternal(url, baseUrl):
 	if url.startswith("/"):
@@ -145,7 +176,6 @@ def getAllHarFiles(harDir="nextexport"):
 
 def readHarFile(harPath):
 	f = codecs.open(harPath, "rb")
-	#b'\x80abc'.decode("utf-8", "replace")
 	harTxt = f.read().decode("utf-8", "replace")
 	harObj = json.loads(harTxt)
 	return harObj
@@ -160,52 +190,54 @@ def getSingleHarFile(harDir="nextexport"):
 	return readHarFile(harFile)
 
 
-
-#Use a global APICall list for this. If the same API call is found, 
-#add the new values to the parameter list 
-def parseCall(url, encodingType, method, size=0):
+def parseEntry(entry, searchString=None):
+	url = entry["request"]["url"]
+	method = entry["request"]["method"]
+	params = dict()
 	urlObj = urlparse(url)
-	params = parse_qs(urlObj.query, keep_blank_values=True)
-	#(path, encodingType, method, params, headers):
 	base = urlObj.scheme+"://"+urlObj.netloc
-	apiCall = APICall(url, base, urlObj.path, encodingType, method, params, url, size)
+	mimeType = None
+	responseSize = 0
+	if "content" in entry["response"] and "mimeType" in entry["response"]["content"]:
+		
+		if searchString is not None:
+			if "text" not in entry["response"]["content"] or searchString not in entry["response"]["content"]["text"]:
+				return None
+
+		contentType = entry["response"]["content"]["mimeType"]
+		responseSize = entry["response"]["content"]["size"]
+		contentTypesRecorded = ["text/html", "application/json", "application/xml"]
+		if contentType is None:
+			return None
+		elif contentType.lower() in contentTypesRecorded:
+			mimeType = contentType.lower()
+		elif contentType.lower() == "application/gzip":
+			print("GZIP ENTRY:\n"+entry)
+		else:
+			return None
+	if method == "GET":
+		params = parse_qs(urlObj.query, keep_blank_values=True)
+	elif method == "POST":
+		paramList = entry["request"]["postData"]["params"]
+		if paramList is not None:
+			for param in paramList:
+				if param['name'] not in params:
+					params[param['name']] = []
+				params[param['name']].append(param['value'])
+		elif entry["request"]["postData"]["text"] is not None:
+			paramList = entry["request"]["postData"]["text"]
+	apiCall = APICall(url, base, urlObj.path, mimeType, method, params, responseSize)
 	return apiCall
 
-def searchHarfile(harObj, searchString):
-	apiCalls = []
-	entries = harObj["log"]["entries"]
-	for entry in entries:
-		if entry["response"] is not None and entry["response"]["content"] is not None and entry["response"]["content"]["text"] is not None:
-			text = entry["response"]["content"]["text"]
-			if searchString in text:
-				url = entry["request"]["url"]
-				method = entry["request"]["method"]
-				contentType = entry["response"]["content"]["mimeType"]
-				#(path, encodingType, method, params, headers)
-				parseCall(url, contentType, method).addToList(apiCalls)
-
-	return apiCalls
 
 
-def scanHarfile(harObj, apiCalls = []):
+def scanHarfile(harObj, apiCalls = [], searchString=None, removeParams=False):
 	#Store the api call objects here
 	entries = harObj["log"]["entries"]
 	for entry in entries:
-		url = entry["request"]["url"]
-		method = entry["request"]["method"]
-		if entry["response"]["content"] is not None and entry["response"]["content"]["mimeType"] is not None: 
-			contentType = entry["response"]["content"]["mimeType"]
-			responseSize = entry["response"]["content"]["size"]
-			if contentType is None:
-				print("No header for response "+str(url))
-			elif contentType.lower() == "application/json":
-				parseCall(url, "json", method, responseSize).addToList(apiCalls)
-
-			elif contentType.lower() == "application/xml":
-				parseCall(url, "xml", method, responseSize).addToList(apiCalls)
-		else:
-			print("No headers in response")
-
+		call = parseEntry(entry, searchString=searchString)
+		if call is not None:
+			call.addToList(apiCalls, removeParams)
 	return apiCalls
 
 def parseMultipleHars(directory):
@@ -214,85 +246,71 @@ def parseMultipleHars(directory):
 	for harPath in harPaths:
 		print("Parsing file: "+harPath)
 		harObj = readHarFile(harPath)
-		apiCalls = scanHarfile(harObj, apiCalls)
+		if removeParams in args.o:
+			apiCalls = scanHarfile(harObj, apiCalls=apiCalls, removeParams=True)
+		else:
+			apiCalls = scanHarfile(harObj, apiCalls=apiCalls)
 	return apiCalls
 
 #Performs a recursive crawl of a site, searching for APIs
-def crawlingScan(url, apiResults = [], allFoundURLs = []):
+def crawlingScan(url, apiCalls = [], allFoundURLs = [], removeParams=False):
 	try:
 		print("Scanning URL: "+url)
 		html = openURL(url)
 		bsObj = BeautifulSoup(html, "lxml")
 		harObj = getSingleHarFile()
-		apiResults = scanHarfile(harObj, apiResults)
+		apiCalls = scanHarfile(harObj, apiCalls=apiCalls, removeParams=removeParams)
 		allFoundURLs, newUrls = findInternalURLs(bsObj, url, allFoundURLs)
 		for newUrl in newUrls:
-			crawlingScan(newUrl, apiResults, allFoundURLs)
+			crawlingScan(newUrl, apiCalls, allFoundURLs)
 	except (KeyboardInterrupt, SystemExit):
 		print("Stopping crawl")
-		print(str(len(apiResults))+" calls found")
-		for apiCall in apiResults:
-			apiCall.toString()
-		sys.exit(1)
-		os._exit(1)
-	return apiResults
+		outputAPIs(apiCalls)
+		exit(1)
+	return apiCalls
 
 
 #Clean up any existing har files
 setup()
 
-#Usage: 
-#$python3 http://example.com search searchTerm
-#$python3 http://example.com scan
-#python3 https://map.crossfit.com scan
-usage = '''
-USAGE:
-python apiFinder.py search <url> <search term>" 
-python apiFinder.py scan <url>
-python apiFinder.py parse <directory>
-	'''
-if len(sys.argv) < 2:
-	usage = "Need some more arguments there!"+usage
-	print(usage)
-	sys.exit(0)
+parser = argparse.ArgumentParser()
+parser.add_argument("-u", help="Target URL", nargs='?')
+parser.add_argument("-d", help="Target directory", nargs='?')
+parser.add_argument("-s", help="Search term", nargs='?')
+parser.add_argument("-o", help="Optional (removeParams, crawlApis)", nargs='+')
+args = parser.parse_args()
 
-
-apiResults = None
-#Scan for all APIs
-if sys.argv[1].lower() == "scan":
-	#Move recursively through the site
-	if sys.argv[2] == None:
-		print("Must provide URL."+usage)
-		sys.exit(1)
-	apiResults = crawlingScan(sys.argv[2])
-	
-
-#Search for text found within a particular API
-elif sys.argv[1].lower() == "search":
-	if sys.argv[2] is None:
-		print("Must provide URL."+usage)
-		sys.exit(1)
-	if sys.argv[3] is None:
-		print("Must provide search string."+usage)
-		sys.exit(1)
-	print("Searching URL for \""+sys.argv[3]+"\"")
-	openURL(sys.argv[2])
-	harObj = getSingleHarFile()
-	apiResults = searchHarfile(harObj, sys.argv[3])
-
-elif sys.argv[1].lower() == "parse":
-	print("Parsing existing directory of har files")
-	if sys.argv[2] is None:
-		print("Must provide directory"+usage)
-		sys.exit(1)
-	apiResults = parseMultipleHars(sys.argv[2])
-
-else:
-	print("Unknown function "+str(sys.argv[1])+usage)
+if not (args.u or args.d):
+	print("Need to provide either a URL or search directory. Use -h for help")
 	sys.exit(1)
 
 
-print("API RESULTS ARE")
-for apiResult in apiResults:
-	print(apiResult.toString())
+apiCalls = None
+
+#Search for text found within a particular API
+if args.s:
+	if not args.u:
+		print("Must provide URL.")
+		sys.exit(1)
+	print("Searching "+args.u+" for \""+args.s+"\"")
+	openURL(args.u)
+	harObj = getSingleHarFile()
+	apiCalls = scanHarfile(harObj, searchString=args.s)
+
+
+#Scan for all APIs
+elif not args.d:
+	#Move recursively through the site
+	if "removeParams" in args.o:
+		apiCalls = crawlingScan(args.u, removeParams=True)
+	else:
+		apiCalls = crawlingScan(args.u)
+	
+
+else:
+	print("Parsing existing directory of har files")
+	apiCalls = parseMultipleHars(args.d)
+
+outputAPIs(apiCalls)
+
 
