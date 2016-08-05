@@ -1,27 +1,61 @@
 from statistics import mean
+import requests
+import time
+import json
 
 class APICall:
 
-	def __init__(self, originalUrl, base, path, encodingType, method, params, headers, size):
+	def __init__(self, originalUrl, base, path, encodingType, method, params, size):
 		self.originalUrl = originalUrl
-		self.base = base
-		self.path = path
+		self.base = base.rstrip("/")
+		self.path = path.rstrip("/")
 		self.encodingType = encodingType
 		self.method = method
 		#Dictionary of key, [list of values] pairs
 		self.params = params
-		self.headers = headers
+		self.pathParams = set()
 		size = int(size)
 		if size is not None and size > 0:
 			self.returnSizes = [size]
 		else:
 			self.returnSizes = []
 
+	def __json__(self):
+		jsonDict = {"original":self.originalUrl, "base":self.base, "path":self.path}
+		jsonDict["encodingType"] = self.encodingType
+		jsonDict["method"] = self.method
+		jsonDict["params"] = self.params
+		jsonDict["pathParams"] = list(self.pathParams)
+		jsonDict["responseSizes"] = 0 if len(self.returnSizes) == 0 else int(mean(self.returnSizes))
+		return jsonDict
+
+	def html(self):
+		print("<div></div>")
+
+	def removeUnneededParameters(self):
+		# params is a dict of [string:string], not [string:list<string>]
+		# need to convert
+		params = dict()
+		for key, value in self.params.items():
+			params[key] = value[0]
+		str(self.base)+str(self.path)
+		#get baseline
+		baseline = requests.get(str(self.base)+str(self.path), params=params).text
+		for key in params.keys():
+			newParams = dict(params)
+			del newParams[key]
+			testText = requests.get(str(self.base)+str(self.path), params=newParams).text
+			if testText == baseline:
+				del self.params[key]
+
 	#Adds the API call to the list if it does not exist yet. If the call does
 	#exist in the list, integrates any new parameters found
-	def addToList(self, apiCalls):
+	def addToList(self, apiCalls, removeUnneededParameters=False):
+		if removeUnneededParameters:
+			self.removeUnneededParameters()
+
 		for call in apiCalls:
-			if self.base == call.base and self.path == call.path:
+			if self.path == call.path and self.base == call.base:
 				call.returnSizes = call.returnSizes + self.returnSizes
 				#The calls are the same, make sure to add all the 
 				for key, vals in self.params.items():
@@ -40,11 +74,15 @@ class APICall:
 	def toString(self):
 		cellSize = 40
 		print("\n"+cellSize*"-")
-		print("URL: "+str(self.base)+str(self.path))
+		if len(self.pathParams) > 0:
+			print("URL: "+str(self.base)+str(self.path)+"/"+",".join(self.pathParams))
+		else:
+			print("URL: "+str(self.base)+str(self.path))
+		print("METHOD: "+self.method)
 		if len(self.returnSizes) > 0:
 			print("AVG RESPONSE SIZE: "+str(int(mean(self.returnSizes))))
 		if len(self.params) > 0:
-			print("|  KEY"+" "*(cellSize-5)+"|  VALUE"+" "*(cellSize-7)+"|")
+			print("|  KEY"+" "*(cellSize-5)+"|  VALUE(S)"+" "*(cellSize-10)+"|")
 			for key, vals in self.params.items():
 				keySpace = cellSize - len(key)
 				if vals[0] == "":
@@ -63,4 +101,9 @@ class APICall:
 					valSpace = cellSize - valLength
 					print("|"+key+" "*keySpace+"|"+valStr+" "*valSpace+"|")
 				print("--"+"--"*cellSize+"-")
-				
+
+class APICallEncoder(json.JSONEncoder):
+	def default(self, obj):
+		if hasattr(obj, '__json__'):
+			return obj.__json__()
+		return json.JSONEncoder.default(self, obj)
