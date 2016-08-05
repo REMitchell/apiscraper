@@ -2,10 +2,12 @@ from statistics import mean
 import requests
 import time
 import json
+import html
+
 
 class APICall:
 
-	def __init__(self, originalUrl, base, path, encodingType, method, params, size):
+	def __init__(self, originalUrl, base, path, encodingType, method, params, size, content):
 		self.originalUrl = originalUrl
 		self.base = base.rstrip("/")
 		self.path = path.rstrip("/")
@@ -19,6 +21,8 @@ class APICall:
 			self.returnSizes = [size]
 		else:
 			self.returnSizes = []
+		self.unneededKeys = []
+		self.content = content
 
 	def __json__(self):
 		jsonDict = {"original":self.originalUrl, "base":self.base, "path":self.path}
@@ -27,10 +31,22 @@ class APICall:
 		jsonDict["params"] = self.params
 		jsonDict["pathParams"] = list(self.pathParams)
 		jsonDict["responseSizes"] = 0 if len(self.returnSizes) == 0 else int(mean(self.returnSizes))
+		jsonDict["content"] = self.content
 		return jsonDict
 
-	def html(self):
-		print("<div></div>")
+	def toHTML(self):
+		htmlVal = "<div class=\"apicall\">"
+		htmlVal += "<b>URL:</b>"+self.base+self.path
+		htmlVal += "<table><tr><td>Key</td><td>Value(s)</td></tr>"
+		for key, vals in self.params.items():
+			htmlVal += "<tr><td>"+key+"</td>"
+			htmlVal += "<td>"+str(vals)+"</td></tr>"
+		htmlVal += "</table><p>"
+		htmlVal += "<b>Example:</b> "+self.originalUrl+"</br>"
+		htmlVal += "<textarea class=\"content\">"
+		htmlVal += html.escape(self.content, quote=True)
+		htmlVal += "</textarea></div>"
+		return htmlVal
 
 	def removeUnneededParameters(self):
 		# params is a dict of [string:string], not [string:list<string>]
@@ -46,18 +62,24 @@ class APICall:
 			del newParams[key]
 			testText = requests.get(str(self.base)+str(self.path), params=newParams).text
 			if testText == baseline:
+				self.unneededKeys.append(key)
 				del self.params[key]
 
 	#Adds the API call to the list if it does not exist yet. If the call does
 	#exist in the list, integrates any new parameters found
-	def addToList(self, apiCalls, removeUnneededParameters=False):
-		if removeUnneededParameters:
-			self.removeUnneededParameters()
-
+	def addToList(self, apiCalls, removeUnneededParams=False):
 		for call in apiCalls:
 			if self.path == call.path and self.base == call.base:
 				call.returnSizes = call.returnSizes + self.returnSizes
-				#The calls are the same, make sure to add all the 
+				for unneededKey in call.unneededKeys:
+					#Remove all the unneeded keys we've found in the parent already
+					if unneededKey in self.params:
+						del self.params[unneededKey]
+
+				if removeUnneededParams:
+					self.removeUnneededParameters()
+
+				#The calls are the same, make sure to add all the params together
 				for key, vals in self.params.items():
 					if key not in call.params:
 						call.params[key] = vals
@@ -66,6 +88,8 @@ class APICall:
 						call.params[key] = list(set(call.params[key] + self.params[key]))
 				return apiCalls
 		#Has not been found in the current list, simply append it
+		if removeUnneededParams:
+			self.removeUnneededParameters()
 		apiCalls.append(self)
 		return apiCalls
 
