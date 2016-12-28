@@ -82,11 +82,11 @@ class ApiFinder:
 		netExportPath = 'extensions/netExport-0.9b7.xpi'
 		fireStarterPath = 'extensions/fireStarter-0.1a6.xpi'
 
-		profile = webdriver.firefox.firefox_profile.FirefoxProfile();
+		profile = webdriver.firefox.firefox_profile.FirefoxProfile()
 
-		profile.add_extension(fireBugPath);
-		profile.add_extension(netExportPath);
-		profile.add_extension(fireStarterPath);
+		profile.add_extension(fireBugPath)
+		profile.add_extension(netExportPath)
+		profile.add_extension(fireStarterPath)
 
 		#firefox preferences
 		profile.set_preference("app.update.enabled", False)  
@@ -115,12 +115,9 @@ class ApiFinder:
 		profile.set_preference("extensions.firebug.netexport.autoExportToServer", False)
 		profile.set_preference("extensions.firebug.netexport.Automation", True)
 		profile.set_preference("extensions.firebug.netexport.showPreview", False)
-		#profile.set_preference("extensions.firebug.netexport.pageLoadedTimeout", 15000)
-		#profile.set_preference("extensions.firebug.netexport.timeout", 10000)
-		
+
 		profile.set_preference("extensions.firebug.netexport.defaultLogDir", os.getcwd()+"/nextexport")
-		##profile.set_preference("extensions.firebug.net.logLimit", 1000)
-		profile.update_preferences();
+		profile.update_preferences()
 
 		self.browser = webdriver.Firefox(firefox_profile=profile)
 		self.browser.get("https://www.mozilla.org/en-US/")
