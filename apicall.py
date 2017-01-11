@@ -3,11 +3,12 @@ import requests
 import time
 import json
 import html
-
+import re
+import codecs
 
 class APICall:
 
-	def __init__(self, originalUrl, base, path, encodingType, method, params, size, content):
+	def __init__(self, originalUrl, base, path, encodingType, method, params, size, content, searchContext=None):
 		self.originalUrl = originalUrl
 		self.base = base.rstrip("/")
 		self.path = path.rstrip("/")
@@ -23,6 +24,7 @@ class APICall:
 			self.returnSizes = []
 		self.unneededKeys = []
 		self.content = content
+		self.searchContext = searchContext
 
 	def __json__(self):
 		jsonDict = {"original":self.originalUrl, "base":self.base, "path":self.path}
@@ -105,6 +107,8 @@ class APICall:
 		print("METHOD: "+self.method)
 		if len(self.returnSizes) > 0:
 			print("AVG RESPONSE SIZE: "+str(int(mean(self.returnSizes))))
+		if self.searchContext:
+			print("SEARCH TERM CONTEXT: "+self.searchContext+"\n")
 		if len(self.params) > 0:
 			print("|  KEY"+" "*(cellSize-5)+"|  VALUE(S)"+" "*(cellSize-10)+"|")
 			for key, vals in self.params.items():
@@ -131,3 +135,54 @@ class APICallEncoder(json.JSONEncoder):
 		if hasattr(obj, '__json__'):
 			return obj.__json__()
 		return json.JSONEncoder.default(self, obj)
+
+class APIWriter():
+	def __init__(self, apiCalls):
+		self.apiCalls = apiCalls
+
+	def outputAPIs(self):
+		print("API RESULTS ARE")
+		jsonFile = open("output.json", "w")
+		self.apiCalls = self.findPathVariables()
+		for apiResult in self.apiCalls:
+			print(apiResult.toString())
+		self.outputHTML()
+		jsonFile.write(outputJSON())
+		return
+
+	def outputJSON(self):
+		return json.dumps(self.apiCalls, cls=APICallEncoder)
+
+	def outputHTML(self):
+		f = codecs.open("html_template.html", "r")
+		template = f.read()
+		templateParts = template.split("CALLSGOHERE")
+		open('output.html', 'w').close()
+		htmlFile = open('output.html', 'a')
+		htmlFile.write(templateParts[0])
+		for apiCall in self.apiCalls:
+			htmlFile.write(apiCall.toHTML())
+		htmlFile.write(templateParts[1])
+		htmlFile.close()
+	
+	def findPathVariables(self):
+		'''
+		Experimental feature to identify variables in paths and group similar API calls
+		'''
+		digits = re.compile('\d')
+		for i in range(0,len(self.apiCalls)):
+			for j in range(i+1, len(self.apiCalls)):
+				paths1 = self.apiCalls[i].path.split('/')
+				paths2 = self.apiCalls[j].path.split('/')
+				if len(paths1) == len(paths2) and len(paths1) > 3:
+					if paths1[:-1] == paths2[:-1]:
+						paths1end = paths1[len(paths1)-1]
+						paths2end = paths2[len(paths2)-1]
+						if ('.' not in paths1end and '.' not in paths1end) or (digits.search(paths1end) and digits.search(paths2end)):
+							#We can assume that they're the same API
+							self.apiCalls[i].pathParams.add(paths1end)
+							self.apiCalls[i].pathParams.add(paths2end)
+							self.apiCalls[i].path = '/'.join(paths1[:-1])
+							#Remove this later
+							self.apiCalls[j].path = ''
+		return [api for api in self.apiCalls if api.path != '']

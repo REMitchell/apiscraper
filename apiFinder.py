@@ -4,40 +4,35 @@ import tldextract
 import sys
 import re
 import os
-import time
-import datetime
-from browsermobproxy import Server
-from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
-import selenium
-import json
-import codecs
+from random import shuffle
+
 from bs4 import BeautifulSoup
-import time
-import argparse
-from apicall import APICall, APICallEncoder
 
-class ApiFinder:
+from apicall import APICall, APICallEncoder, APIWriter
+from harParser import HarParser
+from browser import Browser
 
-	browser = None
+class APIFinder:
 
-	def __init__(self, url, directory, searchString, removeParams, crawlApis):
+	def __init__(self, url=None, harDirectory=None, searchString=None, removeParams=False, count=1):
 		self.url = url
-		self.directory = directory
+		self.harDirectory = harDirectory
 		self.searchString = searchString
 		self.removeParams = removeParams
-		self.crawlApis = crawlApis
-		self.contentTypesRecorded = ["text/html", "application/json", "application/xml"]
+		self.count = count
 		self.browser = None
-
+		
 	def start(self):
-		if self.crawlApis and self.url is None:
-			print("Cannot crawl APIs in directory mode")
+		if self.count > 1 and self.url is None:
+			print("Cannot provide page count with no URL given")
 			exit(1)
-		if self.removeParams and self.urls is None:
+		if self.removeParams and self.url is None:
 			print("WARNING: Must have Internet connection to remove unneeded parameters")
+
 		#Scan for all APIs
 		if self.url:
+			os.makedirs(harDirectory,exist_ok=True)
+			self.browser = Browser("chromedriver/chromedriver", "browsermob-proxy-2.1.4/bin/browsermob-proxy", self.harDirectory)
 			if self.searchString is not None:
 				print("Searching URL "+self.url+" for string "+self.searchString)
 			#Move recursively through the site
@@ -46,125 +41,21 @@ class ApiFinder:
 		#Scan directory of har files
 		else:
 			print("Parsing existing directory of har files")
-			apiCalls = self.parseMultipleHars()
+			harParser = HarParser(self, self.harDirectory, self.searchString, self.removeParams)
+			apiCalls = harParser.parseMultipleHars()
 
-		self.outputAPIs(apiCalls)
 		if self.browser is not None:
-			self.browser.quit()
+			self.browser.close()
 
-	def outputAPIs(self, apiCalls):
-		print("API RESULTS ARE")
-		jsonFile = open("output.json", "w")
-		apiCalls = self.findPathVariables(apiCalls)
-		for apiResult in apiCalls:
-			print(apiResult.toString())
-		self.outputHTML(apiCalls)
-		jsonFile.write(json.dumps(apiCalls, cls=APICallEncoder))
-		return
-
-	def outputHTML(self, apiCalls):
-		f = codecs.open("html_template.html", "r")
-		template = f.read()
-		templateParts = template.split("CALLSGOHERE")
-		open('output.html', 'w').close()
-		htmlFile = open('output.html', 'a')
-		htmlFile.write(templateParts[0])
-		for apiCall in apiCalls:
-			htmlFile.write(apiCall.toHTML())
-		htmlFile.write(templateParts[1])
-		htmlFile.close()
-
-
-	def createWebDriver(self):
-		if self.browser:
-			return self.browser
-		fireBugPath = 'extensions/firebug-2.0.16.xpi'
-		netExportPath = 'extensions/netExport-0.9b7.xpi'
-		fireStarterPath = 'extensions/fireStarter-0.1a6.xpi'
-
-		profile = webdriver.firefox.firefox_profile.FirefoxProfile()
-
-		profile.add_extension(fireBugPath)
-		profile.add_extension(netExportPath)
-		profile.add_extension(fireStarterPath)
-
-		#firefox preferences
-		profile.set_preference("app.update.enabled", False)  
-		profile.native_events_enabled = True
-		profile.set_preference("webdriver.log.file", os.getcwd()+"/log.txt")
-		#profile.set_preference("extensions.firebug.DBG_STARTER", True);
-
-		profile.set_preference("extensions.firebug.currentVersion", "2.0.16")
-		profile.set_preference("extensions.firebug.addonBarOpened", True)
-		profile.set_preference("extensions.firebug.addonBarOpened", True)
-		profile.set_preference("extensions.firebug.consoles.enableSite", True)						  
-
-		profile.set_preference("extensions.firebug.console.enableSites", True)
-		profile.set_preference("extensions.firebug.script.enableSites", True)
-		profile.set_preference("extensions.firebug.net.enableSites", True)
-		profile.set_preference("extensions.firebug.previousPlacement", 1)
-		profile.set_preference("extensions.firebug.allPagesActivation", "on")
-		profile.set_preference("extensions.firebug.onByDefault", True)
-		profile.set_preference("extensions.firebug.defaultPanelName", "net")
-
-		#set net export preferences
-		profile.set_preference("extensions.firebug.netexport.alwaysEnableAutoExport", True)
-		profile.set_preference("extensions.firebug.netexport.autoExportToFile", True)
-		profile.set_preference("extensions.firebug.netexport.saveFiles", True)
-
-		profile.set_preference("extensions.firebug.netexport.autoExportToServer", False)
-		profile.set_preference("extensions.firebug.netexport.Automation", True)
-		profile.set_preference("extensions.firebug.netexport.showPreview", False)
-
-		profile.set_preference("extensions.firebug.netexport.defaultLogDir", os.getcwd()+"/nextexport")
-		profile.update_preferences()
-
-		self.browser = webdriver.Firefox(firefox_profile=profile)
-		self.browser.get("https://www.mozilla.org/en-US/")
-		self.setup()
-		time.sleep(5)
-		return self.browser
+		return apiCalls
 
 	def openURL(self, url):
-		browser = self.createWebDriver()
 		try:
-			browser.get(url) #load the url in firefox
+			return self.browser.get(url) #load the url in Chrome
 		except WebDriverException as e:
 			print("Error getting URL: "+url)
 			print(format(e))
-		time.sleep(3) #wait for the page to load
-		browser.execute_script("window.scrollTo(0, document.body.scrollHeight/5);")
-		time.sleep(1) #wait for the page to load
-		browser.execute_script("window.scrollTo(0, document.body.scrollHeight/4);")
-		time.sleep(1) #wait for the page to load
-		browser.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
-		time.sleep(1) #wait for the page to load
-		browser.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-		time.sleep(1) #wait for the page to load
-		browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
 
-		time.sleep(10) #wait for the page to load
-		html = browser.page_source
-		return html
-
-	def findPathVariables(self, apiList):
-		digits = re.compile('\d')
-		for i in range(0,len(apiList)):
-			for j in range(i+1, len(apiList)):
-				paths1 = apiList[i].path.split('/')
-				paths2 = apiList[j].path.split('/')
-				if len(paths1) == len(paths2) and len(paths1) > 3:
-					if paths1[:-1] == paths2[:-1]:
-						paths1end = paths1[len(paths1)-1]
-						paths2end = paths2[len(paths2)-1]
-						if ('.' not in paths1end and '.' not in paths1end) or (digits.search(paths1end) and digits.search(paths2end)):
-							#We can assume that they're the same API
-							apiList[i].pathParams.add(paths1end)
-							apiList[i].pathParams.add(paths2end)
-							apiList[i].path = '/'.join(paths1[:-1])
-							#Remove this later
-							apiList[j].path = ''
-		return [api for api in apiList if api.path != '']
 
 	def isInternal(self, url, baseUrl):
 		if url.startswith("/"):
@@ -208,147 +99,43 @@ class ApiFinder:
 
 	#Get rid of all the current har files
 	def setup(self):
-		files = os.listdir(self.directory)
+		files = os.listdir(self.harDirectory)
 		for singleFile in files:
 			if "har" in singleFile:
-				os.remove(self.directory+"/"+singleFile)
+				os.remove(self.harDirectory+"/"+singleFile)
 
-	def getAllHarFiles(self):
-		files = os.listdir(self.directory)
-		harFiles = []
-		for filename in files:
-			if "har" in filename:
-				harFiles.append(self.directory+"/"+filename)
-		return harFiles
-
-	def readHarFile(self, harPath):
-		f = codecs.open(harPath, "rb")
-		harTxt = f.read().decode("utf-8", "replace")
-		harObj = json.loads(harTxt)
-		return harObj
-
-	def getSingleHarFile(self):
-		#f = open("nextexport/"+files[0], 'rb')
-		harFiles = self.getAllHarFiles()
-		if len(harFiles) < 1:
-			return None
-		#Get last harFile in the directory
-		harFile = self.getAllHarFiles()[len(harFiles)-1]
-		return self.readHarFile(harFile)
-
-
-	def parseEntry(self, entry):
-		url = entry["request"]["url"]
-		method = entry["request"]["method"]
-		params = dict()
-		urlObj = urlparse(url)
-		base = urlObj.scheme+"://"+urlObj.netloc
-		mimeType = None
-		responseSize = 0
-		if "content" in entry["response"] and "mimeType" in entry["response"]["content"] and "text" in entry["response"]["content"]:
-			if self.searchString is not None:
-				if "text" not in entry["response"]["content"] or self.searchString not in entry["response"]["content"]["text"]:
-					return None
-
-			contentType = entry["response"]["content"]["mimeType"]
-			responseSize = entry["response"]["content"]["size"]
-			print("url is: "+url)
-			content = entry["response"]["content"]["text"]
-			if contentType is None:
-				return None
-			elif contentType.lower() in self.contentTypesRecorded:
-				mimeType = contentType.lower()
-			elif contentType.lower() == "application/gzip":
-				print("GZIP ENTRY:\n"+entry)
-			else:
-				return None
-
-			if method == "GET":
-				params = parse_qs(urlObj.query, keep_blank_values=True)
-			elif method == "POST":
-				paramList = entry["request"]["postData"]["params"]
-				if paramList is not None:
-					for param in paramList:
-						if param['name'] not in params:
-							params[param['name']] = []
-						params[param['name']].append(param['value'])
-				elif entry["request"]["postData"]["text"] is not None:
-					paramList = entry["request"]["postData"]["text"]
-			apiCall = APICall(url, base, urlObj.path, mimeType, method, params, responseSize, content)
-			return apiCall
-
-
-
-	def scanHarfile(self,harObj, apiCalls = []):
-		#Store the api call objects here
-		entries = harObj["log"]["entries"]
-		for entry in entries:
-			call = self.parseEntry(entry)
-			if call is not None:
-				call.addToList(apiCalls, removeUnneededParams=self.removeParams)
-		return apiCalls
-
-	def parseMultipleHars(self):
-		apiCalls = []
-		harPaths = self.getAllHarFiles()
-		print(harPaths)
-		for harPath in harPaths:
-			print("Parsing file: "+harPath)
-			harObj = self.readHarFile(harPath)
-			apiCalls = self.scanHarfile(harObj, apiCalls=apiCalls)
-		return apiCalls
 
 	#Performs a recursive crawl of a site, searching for APIs
 	def crawlingScan(self, url, apiCalls = [], allFoundURLs = []):
-		if self.searchString is not None and len(apiCalls) > 0:
-			return apiCalls
+		
+		self.count = self.count - 1
+		if self.count < 0:
+			return
+
+		harParser = HarParser(self.harDirectory, searchString=self.searchString, removeParams=self.removeParams)
+
+		#If uncommented, will return as soon as a matching call is found
+		#if self.searchString is not None and len(apiCalls) > 0:
+		#	return apiCalls
 		try:
 			print("Scanning URL: "+url)
 			html = self.openURL(url)
-			bsObj = BeautifulSoup(html, "lxml")
-			harObj = self.getSingleHarFile()
-			apiCalls = self.scanHarfile(harObj, apiCalls=apiCalls)
-			allFoundURLs, newUrls = self.findInternalURLs(bsObj, url, allFoundURLs)
-			for newUrl in newUrls:
-				self.crawlingScan(newUrl, apiCalls, allFoundURLs)
+			if html is not None:
+				bsObj = BeautifulSoup(html, "lxml")
+
+				harObj = harParser.getSingleHarFile()
+				apiCalls = harParser.scanHarfile(harObj, apiCalls=apiCalls)
+
+				allFoundURLs, newUrls = self.findInternalURLs(bsObj, url, allFoundURLs)
+				shuffle(newUrls)
+				
+				for newUrl in newUrls:
+					self.crawlingScan(newUrl, apiCalls, allFoundURLs)
+		
 		except (KeyboardInterrupt, SystemExit):
 			print("Stopping crawl")
-			self.outputAPIs(apiCalls)
+			self.browser.close()
+			apiWriter = APIWriter(apiCalls)
+			apiWriter.outputAPIs()
 			exit(1)
 		return apiCalls
-
-
-#Clean up any existing har files
-#setup()
-
-parser = argparse.ArgumentParser()
-parser.add_argument("-u", help="Target URL", nargs='?')
-parser.add_argument("-d", help="Target directory", nargs='?')
-parser.add_argument("-s", help="Search term", nargs='?')
-parser.add_argument("-o", help="Optional (removeParams, crawlApis)", nargs='+')
-args = parser.parse_args()
-
-if not (args.u or args.d):
-	print("Need to provide either a URL or search directory. Use -h for help")
-	sys.exit(1)
-
-
-apiCalls = None
-removeParams = False
-crawlApis = False
-
-if args.d is None:
-	args.d = "nextexport"
-
-if args.o is not None:
-	if "removeParams" in args.o:
-		removeParams = True
-	if "crawlApis" in args.o:
-		crawlApis = True
-
-finder = ApiFinder(args.u, args.d, args.s, removeParams, crawlApis)
-
-finder.start()
-
-
-
