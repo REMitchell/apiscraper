@@ -24,19 +24,26 @@ The script can be run from the command line using:
 <code>$python3 apiFinder.py [commands]</code>
 <p>
 If you get confused about which commands to use, use the -h flag. 
+
 <code>
-$ python3 apiFinder.py -h <p>
+$ python3 consoleservice.py -h <p>
 usage: apiFinder.py [-h] [-u [U]] [-d [D]] [-s [S]] [-c [C]] [--p]
 <p>
 optional arguments:<br>
+
   -h, --help  show this help message and exit<br>
+
   -u [U]      Target URL. If not provided, target directory will be scanned
               for har files.<br>
+
   -d [D]      Target directory (default is "hars"). If URL is provided,
               directory will store har files. If URL is not provided,
               directory will be scanned.<br>
+
   -s [S]      Search term<br>
+
   -c [C]      Count of pages to crawl (with target URL only)<br>
+  
   --p         Flag, remove unnecessary parameters (may dramatically increase
               run time)<br>
   </code>
