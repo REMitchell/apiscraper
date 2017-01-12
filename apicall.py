@@ -101,7 +101,7 @@ class APICall:
 		cellSize = 40
 		print("\n"+cellSize*"-")
 		if len(self.pathParams) > 0:
-			print("URL: "+str(self.base)+str(self.path)+"/"+",".join(self.pathParams))
+			print("URL: "+str(self.base)+str(self.path)+"/\nPATH PARAMS: "+",".join(self.pathParams))
 		else:
 			print("URL: "+str(self.base)+str(self.path))
 		print("METHOD: "+self.method)
@@ -139,15 +139,17 @@ class APICallEncoder(json.JSONEncoder):
 class APIWriter():
 	def __init__(self, apiCalls):
 		self.apiCalls = apiCalls
-
+		self.apiCalls = self.findPathVariables()
+		print("OUTPUTTING APIS:")
+		print(len(apiCalls))
+		
 	def outputAPIs(self):
 		print("API RESULTS ARE")
 		jsonFile = open("output.json", "w")
-		self.apiCalls = self.findPathVariables()
 		for apiResult in self.apiCalls:
 			print(apiResult.toString())
 		self.outputHTML()
-		jsonFile.write(outputJSON())
+		jsonFile.write(self.outputJSON())
 		return
 
 	def outputJSON(self):
@@ -165,6 +167,14 @@ class APIWriter():
 		htmlFile.write(templateParts[1])
 		htmlFile.close()
 	
+	def isPathVar(self, var):
+		if '.' in var:
+			return False
+		numDigs = sum(c.isdigit() for c in var)
+		if float(numDigs) / float(len(var)) > .5:
+			return True		
+		return False
+
 	def findPathVariables(self):
 		'''
 		Experimental feature to identify variables in paths and group similar API calls
@@ -174,15 +184,20 @@ class APIWriter():
 			for j in range(i+1, len(self.apiCalls)):
 				paths1 = self.apiCalls[i].path.split('/')
 				paths2 = self.apiCalls[j].path.split('/')
+				print("\n")
+				print(paths1)
+				print(paths2)
 				if len(paths1) == len(paths2) and len(paths1) > 3:
 					if paths1[:-1] == paths2[:-1]:
+						print("Paths match to the last item:")
 						paths1end = paths1[len(paths1)-1]
 						paths2end = paths2[len(paths2)-1]
-						if ('.' not in paths1end and '.' not in paths1end) or (digits.search(paths1end) and digits.search(paths2end)):
+						if self.isPathVar(paths1end) and self.isPathVar(paths2end):
 							#We can assume that they're the same API
+							print("APIs are the same")
 							self.apiCalls[i].pathParams.add(paths1end)
 							self.apiCalls[i].pathParams.add(paths2end)
-							self.apiCalls[i].path = '/'.join(paths1[:-1])
+							#self.apiCalls[i].path = '/'.join(paths1[:-1])
 							#Remove this later
 							self.apiCalls[j].path = ''
 		return [api for api in self.apiCalls if api.path != '']
