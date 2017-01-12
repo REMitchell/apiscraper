@@ -14,13 +14,14 @@ from browser import Browser
 
 class APIFinder:
 
-	def __init__(self, url=None, harDirectory=None, searchString=None, removeParams=False, count=1):
+	def __init__(self, url=None, harDirectory=None, searchString=None, removeParams=False, count=1, cookies=None):
 		self.url = url
 		self.harDirectory = harDirectory
 		self.searchString = searchString
 		self.removeParams = removeParams
 		self.count = count
 		self.browser = None
+		self.cookies = cookies
 		
 	def start(self):
 		if self.count > 1 and self.url is None:
@@ -31,8 +32,9 @@ class APIFinder:
 
 		#Scan for all APIs
 		if self.url:
-			os.makedirs(harDirectory,exist_ok=True)
-			self.browser = Browser("chromedriver/chromedriver", "browsermob-proxy-2.1.4/bin/browsermob-proxy", self.harDirectory)
+			os.makedirs(self.harDirectory,exist_ok=True)
+			self.deleteExistingHars()
+			self.browser = Browser("chromedriver/chromedriver", "browsermob-proxy-2.1.4/bin/browsermob-proxy", self.harDirectory, cookies=self.cookies)
 			if self.searchString is not None:
 				print("Searching URL "+self.url+" for string "+self.searchString)
 			#Move recursively through the site
@@ -41,7 +43,7 @@ class APIFinder:
 		#Scan directory of har files
 		else:
 			print("Parsing existing directory of har files")
-			harParser = HarParser(self, self.harDirectory, self.searchString, self.removeParams)
+			harParser = HarParser(self.harDirectory, self.searchString, self.removeParams)
 			apiCalls = harParser.parseMultipleHars()
 
 		if self.browser is not None:
@@ -50,11 +52,7 @@ class APIFinder:
 		return apiCalls
 
 	def openURL(self, url):
-		try:
-			return self.browser.get(url) #load the url in Chrome
-		except WebDriverException as e:
-			print("Error getting URL: "+url)
-			print(format(e))
+		return self.browser.get(url) #load the url in Chrome
 
 
 	def isInternal(self, url, baseUrl):
@@ -98,7 +96,7 @@ class APIFinder:
 				return header["value"]
 
 	#Get rid of all the current har files
-	def setup(self):
+	def deleteExistingHars(self):
 		files = os.listdir(self.harDirectory)
 		for singleFile in files:
 			if "har" in singleFile:
