@@ -37,14 +37,16 @@ class APICall:
 		return jsonDict
 
 	def toHTML(self):
-		htmlVal = "<div class=\"apicall\">"
+		htmlVal = "<div class=\"apicall "+self.encodingType.split("/")[1]+"\">"
 		htmlVal += "<b>URL:</b>"+self.base+self.path
-		htmlVal += "<table><tr><td>Key</td><td>Value(s)</td></tr>"
-		for key, vals in self.params.items():
-			htmlVal += "<tr><td>"+key+"</td>"
-			htmlVal += "<td>"+str(vals)+"</td></tr>"
-		htmlVal += "</table><p>"
-		htmlVal += "<b>Example:</b> "+self.originalUrl+"</br>"
+		htmlVal += "<br><b>METHOD:</b> "+self.method
+		if len(self.params) > 0:
+			htmlVal += "<table><tr><td><b>Key</b></td><td><b>Value(s)</b></td></tr>"
+			for key, vals in self.params.items():
+				htmlVal += "<tr><td>"+key+"</td>"
+				htmlVal += "<td>"+str(vals)+"</td></tr>"
+			htmlVal += "</table><p>"
+		htmlVal += "<br><b>Example:</b> <a href=\""+self.originalUrl+"\ target=\"_blank\">"+self.originalUrl+"</a></br>"
 		htmlVal += "<textarea class=\"content\">"
 		htmlVal += html.escape(self.content, quote=True)
 		htmlVal += "</textarea></div>"
