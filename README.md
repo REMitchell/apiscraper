@@ -10,7 +10,7 @@ The following Python libraries should be installed (with pip, or the package man
 Download the latest Chrome webdriver and the BrowserMob Proxy bin. Put them into the apiscraper root directory. 
 See line 35 in apiFinder.py to modify the directory names and locations of these binary files:
 
-			`self.browser = Browser("chromedriver/chromedriver", "browsermob-proxy-2.1.4/bin/browsermob-proxy", self.harDirectory)`
+`self.browser = Browser("chromedriver/chromedriver", "browsermob-proxy-2.1.4/bin/browsermob-proxy", self.harDirectory)`
 
 <ul>
 <li><a href="https://sites.google.com/a/chromium.org/chromedriver/downloads">Chrome Driver</a></li>
@@ -21,7 +21,7 @@ See line 35 in apiFinder.py to modify the directory names and locations of these
 
 <h2>Usage</h2>
 The script can be run from the command line using:
-<code>$python3 apiFinder.py [commands]</code>
+<code>$python3 consoleservice.py [commands]</code>
 <p>
 If you get confused about which commands to use, use the -h flag. 
 
