@@ -1,0 +1,4 @@
+browsermob-proxy>=0.80
+selenium>=3.11
+requests>=2.18.4
+tldextract>=2.2.0
