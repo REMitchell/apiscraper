@@ -1,7 +1,8 @@
-from apicall import APIWriter
-from apiFinder import APIFinder
-
 import argparse
+import sys
+
+from apiFinder import APIFinder
+from apicall import APIWriter
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-u", help="Target URL. If not provided, target directory will be scanned for har files.", nargs='?')
