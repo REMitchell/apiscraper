@@ -27,7 +27,7 @@ If you get confused about which commands to use, use the -h flag.
 
 <code>
 $ python3 consoleservice.py -h <p>
-usage: apiFinder.py [-h] [-u [U]] [-d [D]] [-s [S]] [-c [C]] [--p]
+usage: consoleService.py [-h] [-u [U]] [-d [D]] [-s [S]] [-c [C]] [--p]
 <p>
 optional arguments:<br>
 
