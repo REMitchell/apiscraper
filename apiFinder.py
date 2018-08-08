@@ -1,6 +1,5 @@
 import urllib
 from urllib.parse import urlparse, parse_qs
-import tldextract
 import sys
 import re
 import os
@@ -54,11 +53,13 @@ class APIFinder:
 	def openURL(self, url):
 		return self.browser.get(url) #load the url in Chrome
 
+	def getDomain(self, url):
+		return urlparse(url).domain.lstrip('www.')
 
 	def isInternal(self, url, baseUrl):
 		if url.startswith("/"):
 			return baseUrl+url
-		if tldextract.extract(baseUrl).domain == tldextract.extract(url).domain:
+		if self.getDomain(baseUrl) == self.getDomain(url):
 			return url
 		return None
 
