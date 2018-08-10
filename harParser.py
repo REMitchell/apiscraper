@@ -73,13 +73,13 @@ class HarParser():
             if method == "GET":
                 params = parse_qs(urlObj.query, keep_blank_values=True)
             elif method == "POST":
-                paramList = entry["request"]["postData"]["params"]
-                if paramList is not None:
+                if "params" in entry["request"]["postData"]:
+                    paramList = entry["request"]["postData"]["params"]
                     for param in paramList:
                         if param['name'] not in params:
                             params[param['name']] = []
                         params[param['name']].append(param['value'])
-                elif entry["request"]["postData"]["text"] is not None:
+                elif "text" in entry["request"]["postData"]:
                     paramList = entry["request"]["postData"]["text"]
             apiCall = APICall(url, base, urlObj.path, mimeType, method, params, responseSize, content, searchContext=context)
             return apiCall
@@ -97,7 +97,6 @@ class HarParser():
     def parseMultipleHars(self):
         apiCalls = []
         harPaths = self.getAllHarFiles()
-        print(harPaths)
         for harPath in harPaths:
             print("Parsing file: "+harPath)
             harObj = self.readHarFile(harPath)

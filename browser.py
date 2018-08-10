@@ -28,19 +28,18 @@ class Browser:
                 self.driver.add_cookie(cookie)
 
     def get(self, url, timeout=20):
-        print(url)
         self.proxy.new_har(url, {"captureContent":True})
         try:
             self.driver.set_page_load_timeout(timeout)
             self.driver.get(url)
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/5);")
-            time.sleep(.5) #wait for the page to load
+            time.sleep(2) #wait for the page to load
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/4);")
-            time.sleep(.5) #wait for the page to load
+            time.sleep(2) #wait for the page to load
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/3);")
-            time.sleep(.5) #wait for the page to load
+            time.sleep(2) #wait for the page to load
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
-            time.sleep(.5) #wait for the page to load
+            time.sleep(2) #wait for the page to load
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(4) #wait for the page to load
         except TimeoutException:

@@ -4,7 +4,6 @@ import sys
 import re
 import os
 from random import shuffle
-
 from bs4 import BeautifulSoup
 
 from apicall import APICall, APICallEncoder, APIWriter
@@ -54,7 +53,7 @@ class APIFinder:
 		return self.browser.get(url) #load the url in Chrome
 
 	def getDomain(self, url):
-		return urlparse(url).domain.lstrip('www.')
+		return urlparse(url).netloc.lstrip('www.')
 
 	def isInternal(self, url, baseUrl):
 		if url.startswith("/"):
@@ -106,7 +105,6 @@ class APIFinder:
 
 	#Performs a recursive crawl of a site, searching for APIs
 	def crawlingScan(self, url, apiCalls = [], allFoundURLs = []):
-		
 		self.count = self.count - 1
 		if self.count < 0:
 			return

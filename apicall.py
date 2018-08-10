@@ -142,8 +142,6 @@ class APIWriter():
 	def __init__(self, apiCalls):
 		self.apiCalls = apiCalls
 		self.apiCalls = self.findPathVariables()
-		print("OUTPUTTING APIS:")
-		print(len(apiCalls))
 		
 	def outputAPIs(self):
 		print("API RESULTS ARE")
@@ -186,9 +184,6 @@ class APIWriter():
 			for j in range(i+1, len(self.apiCalls)):
 				paths1 = self.apiCalls[i].path.split('/')
 				paths2 = self.apiCalls[j].path.split('/')
-				print("\n")
-				print(paths1)
-				print(paths2)
 				if len(paths1) == len(paths2) and len(paths1) > 3:
 					if paths1[:-1] == paths2[:-1]:
 						print("Paths match to the last item:")
