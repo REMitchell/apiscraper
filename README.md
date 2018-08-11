@@ -6,6 +6,9 @@ The following Python libraries should be installed (with pip, or the package man
 <ul>
 <li>Selenium</li>
 <li>Requests</li>
+<li>Beautiful Soup</li>
+<li>tldextract</li>
+
 </ul>
 Download the latest Chrome webdriver and the BrowserMob Proxy bin. Put them into the apiscraper root directory. 
 See line 35 in apiFinder.py to modify the directory names and locations of these binary files:
